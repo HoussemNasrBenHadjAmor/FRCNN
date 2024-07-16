@@ -138,7 +138,6 @@ def evaluate(
     conf = []
     pred_cls = []
     target_cls = []
-    idx = 0
 
     n_threads = torch.get_num_threads()
     # FIXME remove this and make paste_masks_in_image run on the GPU
@@ -163,33 +162,39 @@ def evaluate(
         outputs = model(images)
         outputs = [{k: v.to(cpu_device) for k, v in t.items()} for t in outputs]
         
-        boxes = outputs[0]['boxes'].cpu().detach().numpy()
-        gt_box = targets[0]['boxes'].cpu().detach().numpy()
-        if len(boxes) == 0 and len (gt_box) ==0 :
-            continue
-        elif len(boxes) == 0 and len (gt_box) !=0 :
-            tp.append(False)
-            continue
-        elif len(gt_box) == 0 and len (boxes) !=0 : 
-            tp.append(False)
-            continue
+        # Extracting boxes, scores, and labels from outputs
+        for output, target in zip(outputs, targets):
+            pred_boxes = output['boxes'].cpu().detach().numpy()
+            pred_scores = output['scores'].cpu().detach().numpy()
+            pred_labels = output['labels'].cpu().detach().numpy()
 
-        gt_box = gt_box[0]
+            gt_boxes = target['boxes'].cpu().detach().numpy()
+            gt_labels = target['labels'].cpu().detach().numpy()
 
-        # Find the box with max iou
-        ious = []
-        for box in boxes : 
-            ious.append(iou(gt_box , box))
+            detected = []
+            for i, pred_box in enumerate(pred_boxes):
+                if len(gt_boxes) == 0:
+                    tp.append(0)
+                    conf.append(pred_scores[i])
+                    pred_cls.append(pred_labels[i])
+                    continue
 
-        max_iou_indx = np.argmax(np.array(ious))
-        pred_box = boxes[max_iou_indx]
-        tp.append(iou(gt_box, pred_box) > 0.5)
+                ious = [iou(pred_box, gt_box) for gt_box in gt_boxes]
+                max_iou = max(ious)
+                max_iou_idx = ious.index(max_iou)
 
-        # Conf 
-        conf.append(outputs[0]['scores'].cpu().detach().numpy()[max_iou_indx])
-        pred_cls.append(outputs[0]['labels'].cpu().detach().numpy()[max_iou_indx])
-        target_cls.extend(targets[0]['labels'].cpu().detach().numpy())
+                if max_iou > 0.5 and gt_labels[max_iou_idx] == pred_labels[i] and max_iou_idx not in detected:
+                    tp.append(1)
+                    detected.append(max_iou_idx)
+                else:
+                    tp.append(0)
 
+                conf.append(pred_scores[i])
+                pred_cls.append(pred_labels[i])
+
+            target_cls.extend(gt_labels)
+        
+        
         model_time = time.time() - model_time
 
         res = {target["image_id"].item(): output for target, output in zip(targets, outputs)}
@@ -210,6 +215,14 @@ def evaluate(
     metric_logger.synchronize_between_processes()
     #print("Averaged stats:", metric_logger)
     coco_evaluator.synchronize_between_processes()
+    
+    #print(f'conf : {conf}')
+    #print(f'pred_cls : {pred_cls}')
+    #print(f'target_cls : {target_cls}')
+    #print(f'tp : {tp}')
+    #print(f'counter : {counter}')
+
+
 
     # accumulate predictions from all images
     coco_evaluator.accumulate()
