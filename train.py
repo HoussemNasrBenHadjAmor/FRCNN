@@ -11,7 +11,7 @@ python train.py --model fasterrcnn_resnet50_fpn --epochs 2 --config data_configs
 python train.py --model fasterrcnn_resnet50_fpn --epochs 2 --use-train-aug --config data_configs/voc.yaml --project-name resnet50fpn_voc --batch-size 4
 """
 
-from torch_utils.engine import (train_one_epoch, evaluate)
+from torch_utils.engine import (train_one_epoch, evaluate, calculate_precision, calculate_recall)
 
 from utils.metrics import (ap_per_class)
 
@@ -24,7 +24,7 @@ from utils.general import (
     set_training_dir, Averager, 
     save_model, save_loss_plot, save_box_loss, save_cls_loss, save_dfl_loss, save_precision, save_recal, save_map50, save_map50_95, save_precision_recall_curve, save_precision_confidence_curve, save_recall_confidence_curve, save_f1_confidence_curve,
     show_tranformed_image,
-    save_mAP, save_model_state, SaveBestModel
+    save_mAP, save_model_state, SaveBestModel, save_precisionB
 )
 from utils.logging import (
     set_log, 
@@ -176,6 +176,8 @@ def main(args):
     val_mAP50 = []
     val_mAP50_95 = []
     start_epochs = 0
+    val_precision_per_epoch = []
+    val_recall_per_epoch = []
 
     if args['weights'] is None:
         print('Building model from scratch...')
@@ -282,7 +284,7 @@ def main(args):
             scheduler=scheduler
         )
 
-        coco_evaluator, stats, val_pred_image, category_ids, category_names, tp, conf, pred_cls, target_cls = evaluate(
+        coco_evaluator, stats, val_pred_image, category_ids, category_names, tp, conf, pred_cls, target_cls, fn_count = evaluate(
             model, 
             valid_loader, 
             device=DEVICE,
@@ -291,6 +293,18 @@ def main(args):
             classes=CLASSES,
             colors=COLORS
         )
+
+        print(f'stats : {stats}')
+
+        precision = calculate_precision(tp, pred_cls)
+        recall = calculate_recall(tp, fn_count)
+        
+        # Append the precision value
+        val_precision_per_epoch.append(precision)
+        val_recall_per_epoch.append(recall)
+        print(f'precision_per_epoch : {val_precision_per_epoch}')
+        print(f'val_recall_per_epoch : {val_recall_per_epoch}')
+
 
         # Append the current epoch's batch-wise losses to the `train_loss_list`.
         train_loss_list.extend(batch_loss_list)
@@ -321,13 +335,14 @@ def main(args):
         # Save dfl (Focal Loss) loss for each epoch
         save_dfl_loss(all_train_dfl_loss_per_epoch, OUT_DIR, title='Dfl_Loss_Per_Epoch')
         # Save precision for each epoch
-        save_precision(val_precision, OUT_DIR, title='Metrics-precision(B)')
+        #save_precision(val_precision, OUT_DIR, title='Metrics-precision(B)')
         # Save recal for each epoch
-        save_recal(val_recall, OUT_DIR, title='Metrics-recal(B)')
+        #save_recal(val_recall, OUT_DIR, title='Metrics-recal(B)')
         # Save mAP50  for each epoch
         save_map50(val_mAP50, OUT_DIR, title='Metrics-mAP50(B)')
         # Save mAP50_95  for each epoch
         save_map50_95(val_mAP50_95, OUT_DIR, title='Metrics-mAP50-95(B)')
+        save_precisionB(val_precision_per_epoch, OUT_DIR, title='Metrics-precision(B)')
         # Save precision recall curve for each epoch
         #save_precision_recall_curve(coco_evaluator, category_ids, category_names, OUT_DIR, 'Precision-Recall Curve')
         # Save precision confidence curve for each epoch
