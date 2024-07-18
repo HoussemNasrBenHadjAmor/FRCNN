@@ -124,6 +124,17 @@ def _get_iou_types(model):
     return iou_types
 
 
+def calculate_precision(tp, pred_cls):
+    tp = np.array(tp)
+    pred_cls = np.array(pred_cls)
+    precision = sum(tp) / len(pred_cls)
+    return precision   
+
+def calculate_recall(tp, fn_count):
+    tp_count = sum(tp)  # Total number of true positives
+    recall = tp_count / (tp_count + fn_count)
+    return recall
+
 @torch.inference_mode()
 def evaluate(
     model, 
@@ -138,6 +149,8 @@ def evaluate(
     conf = []
     pred_cls = []
     target_cls = []
+    fn_count = 0
+    fn_count_v2 = 0
 
     n_threads = torch.get_num_threads()
     # FIXME remove this and make paste_masks_in_image run on the GPU
@@ -193,7 +206,12 @@ def evaluate(
                 pred_cls.append(pred_labels[i])
 
             target_cls.extend(gt_labels)
-        
+            # Calculate false negatives
+            # False negative is (1 - True_positive)
+            fn_count_v2 += 1 - tp.cumsum(0)
+            print(f'fn_count_v2 : {fn_count_v2}')
+            fn_count += len(gt_labels) - len(detected)
+            print(f'fn_count : {fn_count}')
         
         model_time = time.time() - model_time
 
@@ -232,4 +250,4 @@ def evaluate(
     category_ids = data_loader.dataset.get_category_ids()
     category_names = data_loader.dataset.get_category_names()
 
-    return coco_evaluator, stats, val_saved_image, category_ids, category_names, tp, conf, pred_cls, target_cls
+    return coco_evaluator, stats, val_saved_image, category_ids, category_names, tp, conf, pred_cls, target_cls, fn_count
