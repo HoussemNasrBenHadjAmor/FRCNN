@@ -37,11 +37,7 @@ def train_one_epoch(
     batch_loss_rpn_list = []
     train_box_loss_per_epoch = []
     train_class_loss_per_epoch = []
-    train_dfl_loss_per_epoch = []
-
-    # Initialize epoch loss accumulators
-    #epoch_box_loss = 0.0
-    #num_batches = 0  
+    train_dfl_loss_per_epoch = [] 
 
     lr_scheduler = None
     if epoch == 0:
@@ -54,15 +50,11 @@ def train_one_epoch(
 
     step_counter = 0
     for images, targets in metric_logger.log_every(data_loader, print_freq, header):
-        #print(f'targets : {targets}')
         step_counter += 1
         images = list(image.to(device) for image in images)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
-        #print(f'targets after modifications : {targets}')
         with torch.cuda.amp.autocast(enabled=scaler is not None):
             loss_dict = model(images, targets)
-
-            #print(f'loss_dict output : {loss_dict}')
             losses = sum(loss for loss in loss_dict.values())
 
         # reduce losses over all GPUs for logging purposes
@@ -70,10 +62,6 @@ def train_one_epoch(
         losses_reduced = sum(loss for loss in loss_dict_reduced.values())
 
         loss_value = losses_reduced.item()
-
-        # Extract and accumulate box regression loss and added new
-        #epoch_box_loss += loss_dict_reduced['loss_box_reg'].item()
-        #num_batches += 1
 
         if not math.isfinite(loss_value):
             print(f"Loss is {loss_value}, stopping training")
@@ -94,7 +82,6 @@ def train_one_epoch(
 
         metric_logger.update(loss=losses_reduced, **loss_dict_reduced)
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
-
         batch_loss_list.append(loss_value)
         batch_loss_cls_list.append(loss_dict_reduced['loss_classifier'].detach().cpu())
         batch_loss_box_reg_list.append(loss_dict_reduced['loss_box_reg'].detach().cpu())
@@ -145,6 +132,12 @@ def evaluate(
     classes=None,
     colors=None
 ):
+    batch_loss_objectness_list=[]
+    batch_loss_box_reg_list=[]
+    batch_loss_cls_list=[]
+    val_box_loss_per_epoch = []
+    val_class_loss_per_epoch = []
+    val_dfl_loss_per_epoch = []
     tp = []
     conf = []
     pred_cls = []
@@ -173,6 +166,7 @@ def evaluate(
         model_time = time.time()
         outputs = model(images)
         outputs = [{k: v.to(cpu_device) for k, v in t.items()} for t in outputs]
+        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
         
         # Extracting boxes, scores, and labels from outputs
         for output, target in zip(outputs, targets):
@@ -208,6 +202,24 @@ def evaluate(
 
             fn_count += len(gt_labels) - len(detected)
     
+          # Calculate validation losses
+        
+        #loss_dict = model(images, targets)
+        #losses = sum(loss for loss in loss_dict.values())
+        
+        # reduce losses over all GPUs for logging purposes
+        #loss_dict_reduced = utils.reduce_dict(loss_dict)
+        #losses_reduced = sum(loss for loss in loss_dict_reduced.values())
+
+        #loss_value = losses_reduced.item()
+
+        #loss_dict_reduced = utils.reduce_dict(loss_dict)
+        #print(f'loss_dict_reduced : {loss_dict_reduced}')
+        #batch_loss_cls_list.append(loss_dict_reduced['loss_classifier'].detach().cpu())
+        #batch_loss_box_reg_list.append(loss_dict_reduced['loss_box_reg'].detach().cpu())
+        #batch_loss_objectness_list.append(loss_dict_reduced['loss_objectness'].detach().cpu())
+      
+        
         model_time = time.time() - model_time
         res = {target["image_id"].item(): output for target, output in zip(targets, outputs)}
         evaluator_time = time.time()
@@ -223,6 +235,9 @@ def evaluate(
                 images, outputs, counter, out_dir, classes, colors
             )
 
+    #val_box_loss_per_epoch.append(sum(batch_loss_box_reg_list)/len(batch_loss_box_reg_list))
+    #val_class_loss_per_epoch.append(sum(batch_loss_cls_list)/len(batch_loss_cls_list))
+    #val_dfl_loss_per_epoch.append(sum(batch_loss_rpn_list)/len(batch_loss_rpn_list))
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     coco_evaluator.synchronize_between_processes()
@@ -234,4 +249,4 @@ def evaluate(
     category_ids = data_loader.dataset.get_category_ids()
     category_names = data_loader.dataset.get_category_names()
 
-    return coco_evaluator, stats, val_saved_image, category_ids, category_names, tp, conf, pred_cls, target_cls, fn_count
+    return coco_evaluator, stats, val_saved_image, category_ids, category_names, tp, conf, pred_cls, target_cls, fn_count 

@@ -171,6 +171,9 @@ def main(args):
     all_train_box_loss_per_epoch = []
     all_train_cls_loss_per_epochs = []
     all_train_dfl_loss_per_epoch = []
+    all_valid_box_loss_per_epoch = []
+    all_valid_cls_loss_per_epochs = []
+    all_valid_dfl_loss_per_epoch = []
     val_precision = []
     val_recall = []
     val_mAP50 = []
@@ -317,6 +320,10 @@ def main(args):
         all_train_box_loss_per_epoch.extend(train_box_loss_per_epoch)
         all_train_cls_loss_per_epochs.extend(train_cls_loss_per_epochs)
         all_train_dfl_loss_per_epoch.extend(train_dfl_loss_per_epoch)
+
+        #all_valid_box_loss_per_epoch.extend(val_box_loss)
+        #all_valid_cls_loss_per_epochs.extend(val_cls)
+        #all_valid_dfl_loss_per_epoch.extend(val_dfl)
         
         np_tp = np.array(tp, dtype=bool)
         np_tp = np_tp[:, np.newaxis]
@@ -325,12 +332,20 @@ def main(args):
 
 
 
-        # Save box loss for each epoch
-        save_box_loss(all_train_box_loss_per_epoch, OUT_DIR, title='Box_Regression_Loss_Per_Epoch')
-        # Save class loss for each epoch 
-        save_cls_loss(all_train_cls_loss_per_epochs, OUT_DIR, title='Cls_Loss_Per_Epoch')
-        # Save dfl (Focal Loss) loss for each epoch
-        save_dfl_loss(all_train_dfl_loss_per_epoch, OUT_DIR, title='Dfl_Loss_Per_Epoch')
+        # Save box loss for each training epoch
+        save_box_loss(all_train_box_loss_per_epoch, OUT_DIR, title='Box_loss_train')
+        # Save class loss for each training epoch 
+        save_cls_loss(all_train_cls_loss_per_epochs, OUT_DIR, title='Cls_loss_train')
+        # Save dfl (Focal Loss) loss for each training epoch
+        save_dfl_loss(all_train_dfl_loss_per_epoch, OUT_DIR, title='Dfl_Loss_train')
+
+        # Save box loss for each validation epoch
+        #save_box_loss(all_valid_box_loss_per_epoch, OUT_DIR, title='Box_loss_val')
+        # Save class loss for each validation epoch 
+        #save_cls_loss(all_valid_cls_loss_per_epochs, OUT_DIR, title='Cls_loss_val')
+        # Save dfl (Focal Loss) loss for each validation epoch
+        #save_dfl_loss(all_valid_dfl_loss_per_epoch, OUT_DIR, title='Dfl_loss_val')
+
         # Save precision for each epoch
         #save_precision(val_precision, OUT_DIR, title='Metrics-precision(B)')
         # Save recal for each epoch
