@@ -179,6 +179,17 @@ def save_precisionB(loss, OUT_DIR, title):
     train_ax.legend()
     figure.savefig(f"{OUT_DIR}/{title}.png")
     plt.close(figure) 
+
+def save_recallB(loss, OUT_DIR, title):
+    figure = plt.figure(figsize=(10, 5))
+    train_ax = figure.add_subplot(1, 1, 1)
+    train_ax.plot(loss, label="Metrics/Recall(B)")
+    train_ax.set_title(title)
+    train_ax.set_xlabel('Epochs')
+    train_ax.set_ylabel('Recall')
+    train_ax.legend()
+    figure.savefig(f"{OUT_DIR}/{title}.png")
+    plt.close(figure)     
         
 
 def save_recall_confidence_curve(coco_evaluator, category_ids, category_names, out_dir, title):

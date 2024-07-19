@@ -24,7 +24,7 @@ from utils.general import (
     set_training_dir, Averager, 
     save_model, save_loss_plot, save_box_loss, save_cls_loss, save_dfl_loss, save_precision, save_recal, save_map50, save_map50_95, save_precision_recall_curve, save_precision_confidence_curve, save_recall_confidence_curve, save_f1_confidence_curve,
     show_tranformed_image,
-    save_mAP, save_model_state, SaveBestModel, save_precisionB
+    save_mAP, save_model_state, SaveBestModel, save_precisionB, save_recallB
 )
 from utils.logging import (
     set_log, 
@@ -294,17 +294,12 @@ def main(args):
             colors=COLORS
         )
 
-        print(f'stats : {stats}')
-
         precision = calculate_precision(tp, pred_cls)
         recall = calculate_recall(tp, fn_count)
-        
-        # Append the precision value
+
+        # Append the precision & recall values
         val_precision_per_epoch.append(precision)
         val_recall_per_epoch.append(recall)
-        print(f'precision_per_epoch : {val_precision_per_epoch}')
-        print(f'val_recall_per_epoch : {val_recall_per_epoch}')
-
 
         # Append the current epoch's batch-wise losses to the `train_loss_list`.
         train_loss_list.extend(batch_loss_list)
@@ -328,6 +323,8 @@ def main(args):
         ap_per_class(category_names,np_tp, np.array(conf), np.array(pred_cls), np.array(target_cls), plot=True , save_dir = OUT_DIR)
         
 
+
+
         # Save box loss for each epoch
         save_box_loss(all_train_box_loss_per_epoch, OUT_DIR, title='Box_Regression_Loss_Per_Epoch')
         # Save class loss for each epoch 
@@ -343,6 +340,7 @@ def main(args):
         # Save mAP50_95  for each epoch
         save_map50_95(val_mAP50_95, OUT_DIR, title='Metrics-mAP50-95(B)')
         save_precisionB(val_precision_per_epoch, OUT_DIR, title='Metrics-precision(B)')
+        save_recallB(val_recall_per_epoch , OUT_DIR, title = 'Metrics-recall(B)')
         # Save precision recall curve for each epoch
         #save_precision_recall_curve(coco_evaluator, category_ids, category_names, OUT_DIR, 'Precision-Recall Curve')
         # Save precision confidence curve for each epoch

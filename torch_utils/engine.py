@@ -150,7 +150,6 @@ def evaluate(
     pred_cls = []
     target_cls = []
     fn_count = 0
-    fn_count_v2 = 0
 
     n_threads = torch.get_num_threads()
     # FIXME remove this and make paste_masks_in_image run on the GPU
@@ -206,15 +205,10 @@ def evaluate(
                 pred_cls.append(pred_labels[i])
 
             target_cls.extend(gt_labels)
-            # Calculate false negatives
-            # False negative is (1 - True_positive)
-            fn_count_v2 += 1 - tp.cumsum(0)
-            print(f'fn_count_v2 : {fn_count_v2}')
-            fn_count += len(gt_labels) - len(detected)
-            print(f'fn_count : {fn_count}')
-        
-        model_time = time.time() - model_time
 
+            fn_count += len(gt_labels) - len(detected)
+    
+        model_time = time.time() - model_time
         res = {target["image_id"].item(): output for target, output in zip(targets, outputs)}
         evaluator_time = time.time()
         coco_evaluator.update(res)
@@ -231,22 +225,12 @@ def evaluate(
 
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    #print("Averaged stats:", metric_logger)
     coco_evaluator.synchronize_between_processes()
-    
-    #print(f'conf : {conf}')
-    #print(f'pred_cls : {pred_cls}')
-    #print(f'target_cls : {target_cls}')
-    #print(f'tp : {tp}')
-    #print(f'counter : {counter}')
-
-
 
     # accumulate predictions from all images
     coco_evaluator.accumulate()
     stats = coco_evaluator.summarize()
     torch.set_num_threads(n_threads)
-    #print(f'stats : {stats}')
     category_ids = data_loader.dataset.get_category_ids()
     category_names = data_loader.dataset.get_category_names()
 
