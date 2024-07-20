@@ -10,7 +10,7 @@ from torch_utils import utils
 from torch_utils.coco_eval import CocoEvaluator
 from torch_utils.coco_utils import get_coco_api_from_dataset
 from utils.general import save_validation_results
-from utils.metrics import(iou)
+from utils.metrics import(iou , ConfusionMatrix)
 
 
 def train_one_epoch(
@@ -156,6 +156,10 @@ def evaluate(
     iou_types = _get_iou_types(model)
     coco_evaluator = CocoEvaluator(coco, iou_types)
 
+     # Initialize confusion matrix
+    category_names = data_loader.dataset.get_category_names()
+    confusion_matrix = ConfusionMatrix(nc=len(category_names))
+
     counter = 0
     for images, targets in metric_logger.log_every(data_loader, 100, header):
         counter += 1
@@ -176,6 +180,21 @@ def evaluate(
 
             gt_boxes = target['boxes'].cpu().detach().numpy()
             gt_labels = target['labels'].cpu().detach().numpy()
+
+            # Format predictions and targets for confusion matrix
+            predn = torch.tensor([
+                [*box, score, label]
+                for box, score, label in zip(pred_boxes, pred_scores, pred_labels)
+            ], dtype=torch.float32)
+
+
+            labels = torch.tensor([
+                [label, *box]
+                for box, label in zip(gt_boxes, gt_labels)
+            ], dtype=torch.float32)
+
+             # Update confusion matrix
+            confusion_matrix.process_batch(predn, labels)
 
             detected = []
             for i, pred_box in enumerate(pred_boxes):
@@ -239,6 +258,10 @@ def evaluate(
     #val_class_loss_per_epoch.append(sum(batch_loss_cls_list)/len(batch_loss_cls_list))
     #val_dfl_loss_per_epoch.append(sum(batch_loss_rpn_list)/len(batch_loss_rpn_list))
     # gather the stats from all processes
+
+    # Plot and save confusion matrix
+    confusion_matrix.plot(save_dir=out_dir, names=category_names)
+
     metric_logger.synchronize_between_processes()
     coco_evaluator.synchronize_between_processes()
 
