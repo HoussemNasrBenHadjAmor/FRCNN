@@ -158,6 +158,7 @@ def evaluate(
 
      # Initialize confusion matrix
     category_names = data_loader.dataset.get_category_names()
+    category_values = [category['name'] for category in category_names]
     confusion_matrix = ConfusionMatrix(nc=len(category_names))
 
     counter = 0
@@ -260,7 +261,7 @@ def evaluate(
     # gather the stats from all processes
 
     # Plot and save confusion matrix
-    confusion_matrix.plot(save_dir=out_dir, names=category_names)
+    confusion_matrix.plot(save_dir=out_dir, names=category_values)
 
     metric_logger.synchronize_between_processes()
     coco_evaluator.synchronize_between_processes()
