@@ -32,7 +32,7 @@ class CustomDataset(Dataset):
         self.mosaic = mosaic
         self.image_file_types = ['*.jpg', '*.jpeg', '*.png', '*.ppm']
         self.all_image_paths = []
-        
+
         # get all the image paths in sorted order
         for file_type in self.image_file_types:
             self.all_image_paths.extend(glob.glob(os.path.join(self.images_path, file_type)))
@@ -80,6 +80,13 @@ class CustomDataset(Dataset):
         #         print(f"Removing {image_name} image")
         #         self.all_image_paths.remove(image_path)
 
+
+    def validate_bbox(self, bbox, image_path):
+        x_min, y_min, x_max, y_max = bbox
+        if x_max <= x_min or y_max <= y_min:
+            raise ValueError(f"x_max is less than or equal to x_min or y_max is less than or equal to y_min for bbox {bbox} for image_path : {image_path}.")
+    
+
     def load_image_and_labels(self, index):
         image_name = self.all_images[index]
         image_path = os.path.join(self.images_path, image_name)
@@ -124,6 +131,9 @@ class CustomDataset(Dataset):
                 xmax, ymax, image_width, image_height
             )
 
+            bbox = [xmin, ymin, xmax, ymax]
+            self.validate_bbox(bbox, image_path )  # Validate the bounding box
+
             orig_boxes.append([xmin, ymin, xmax, ymax])
             
             # Resize the bounding boxes according to the
@@ -144,7 +154,7 @@ class CustomDataset(Dataset):
         # Labels to tensor.
         labels = torch.as_tensor(labels, dtype=torch.int64)
         return image, image_resized, orig_boxes, \
-            boxes, labels, area, iscrowd, (image_width, image_height)
+            boxes, labels, area, iscrowd, (image_width, image_height), image_path, annot_file_path
 
     def check_image_and_annotation(self, xmax, ymax, width, height):
         """
@@ -162,7 +172,7 @@ class CustomDataset(Dataset):
         """ 
         Adapted from: https://www.kaggle.com/shonenkov/oof-evaluation-mixup-efficientdet
         """
-        image, _, _, _, _, _, _, _ = self.load_image_and_labels(index=index)
+        image, _, _, _, _, _, _, _, _, _ = self.load_image_and_labels(index=index)
         orig_image = image.copy()
         # Resize the image according to the `confg.py` resize.
         image = cv2.resize(image, resize_factor)
@@ -179,7 +189,7 @@ class CustomDataset(Dataset):
 
         for i, index in enumerate(indexes):
             image, image_resized, orig_boxes, boxes, \
-            labels, area, iscrowd, dims = self.load_image_and_labels(
+            labels, area, iscrowd, dims, image_path, annot_file_path  = self.load_image_and_labels(
             index=index
             )
             # Resize the current image according to the above resize,
@@ -222,20 +232,20 @@ class CustomDataset(Dataset):
             np.where((result_boxes[:,2]-result_boxes[:,0])*(result_boxes[:,3]-result_boxes[:,1]) > 0)
         ]
         return orig_image, result_image/255., torch.tensor(result_boxes), \
-            torch.tensor(np.array(final_classes)), area, iscrowd, dims
+            torch.tensor(np.array(final_classes)), area, iscrowd, dims, image_path , annot_file_path
 
     def __getitem__(self, idx):
         # Capture the image name and the full image path.
         if not self.mosaic:
             image, image_resized, orig_boxes, boxes, \
-                labels, area, iscrowd, dims = self.load_image_and_labels(
+                labels, area, iscrowd, dims, image_path, annot_file_path = self.load_image_and_labels(
                 index=idx
             )
 
         if self.train and self.mosaic:
             while True:
                 image, image_resized, boxes, labels, \
-                    area, iscrowd, dims = self.load_cutmix_image_and_boxes(
+                    area, iscrowd, dims, image_path, annot_file_path = self.load_cutmix_image_and_boxes(
                     idx, resize_factor=(self.height, self.width)
                 )
                 if len(boxes) > 0:
@@ -251,6 +261,8 @@ class CustomDataset(Dataset):
         target["iscrowd"] = iscrowd
         image_id = torch.tensor([idx])
         target["image_id"] = image_id
+        target['image_path'] = image_path
+        target['annot_path'] = annot_file_path
         if self.use_train_aug: # Use train augmentation if argument is passed.
             train_aug = get_train_aug()
             sample = train_aug(image=image_resized,
@@ -263,10 +275,11 @@ class CustomDataset(Dataset):
                                      bboxes=target['boxes'],
                                      labels=labels)
             image_resized = sample['image']
-            target['boxes'] = torch.Tensor(sample['bboxes'])
+            target['boxes'] = torch.Tensor(sample['bboxes'])    
         
             
         return image_resized, target
+
 
     def __len__(self):
         return len(self.all_images)
@@ -301,6 +314,7 @@ def create_train_dataset(
         train=True, mosaic=mosaic
     )
     return train_dataset
+    
 def create_valid_dataset(
     valid_dir_images, valid_dir_labels, 
     resize_width, resize_height, classes
@@ -322,6 +336,7 @@ def create_train_loader(train_dataset, batch_size, num_workers=0):
         collate_fn=collate_fn
     )
     return train_loader
+    
 def create_valid_loader(valid_dataset, batch_size, num_workers=0):
     valid_loader = DataLoader(
         valid_dataset,
